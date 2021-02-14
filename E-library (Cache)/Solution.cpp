@@ -46,12 +46,12 @@ public:
               book_ptr_list_.clear();
               books_in_cache_.clear();
               memory_in_use = 0;
-          // иначе если общий размер книг превышает ограничение max_memory, из кэша удаляются книги с наименьшим рангом, пока это необходимо.
-          // Возможно, пока он полностью не будет опустошён
           } else{
               book_ptr_list_.push_front(book_shrd_ptr);
               books_in_cache_.insert({ book_name, book_ptr_list_.begin() });
               memory_in_use += book_shrd_ptr->GetContent().length();
+              // иначе если общий размер книг превышает ограничение max_memory, из кэша удаляются книги с наименьшим рангом, пока это необходимо.
+              // Возможно, пока он полностью не будет опустошён
               while (memory_in_use > settings_.max_memory) {
                   memory_in_use -= book_ptr_list_.back()->GetContent().length();
                   books_in_cache_.erase(book_ptr_list_.back()->GetName());
@@ -64,7 +64,7 @@ public:
           // если книга с таким названием уже есть в кэше, 
           // её ранг поднимается до максимального - 
           // опять вставляем указатель на книгу в начало списка (т.е. поднимаем ранг до максимума)
-          // и обнавляем данные в unordered_map
+          // и обновляем данные в unordered_map
           auto temp_ptr = *book_iter->second; 
           auto temp_book_name = book_iter->first;
           book_ptr_list_.erase(book_iter->second);
