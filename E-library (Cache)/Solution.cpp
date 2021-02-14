@@ -11,16 +11,20 @@ using namespace std;
 
 class LruCache : public ICache {
 private:
-    int memory_in_use;
-    shared_ptr<IBooksUnpacker> books_unpacker_;
-    const Settings& settings_;
+    int memory_in_use; // для контроля память кеша - чтобы общий объём считанных книг не превосходил указанного в параметре
+                       // max_memory
+    shared_ptr<IBooksUnpacker> books_unpacker_; // указатель на объект IBooksUnpacker
+    const Settings& settings_; // настройки кэша, в нашей задаче настройки содержат всего один параметр max_memory
 
-    mutable list<BookPtr> book_ptr_list_;
-    mutable unordered_map<string, list<BookPtr>::iterator> books_in_cache_;
+    mutable list<BookPtr> book_ptr_list_; // ранжирование будем обеспечивать добавляя указатели на книги в двунаправленный список. 
+                                          // Максимальный ранг это начало (push_front) списка.
+    mutable unordered_map<string, list<BookPtr>::iterator> books_in_cache_; // мапу пользуем для обеспечения связи итераторов списка с названиями книг
     
-    mutex m;
+    mutex m; // для защиты критической секции
+             // Метод GetBook() может вызываться одновременно из нескольких потоков, 
+             // поэтому необходимо обеспечить ему безопасность работы в таких условиях.
 public:
-  LruCache(
+  LruCache( // Кэширование производится методом вытеснения давно неиспользуемых элементов (Least Recently Used, LRU). 
       shared_ptr<IBooksUnpacker> books_unpacker,
       const Settings& settings): 
           memory_in_use(0),
@@ -31,14 +35,19 @@ public:
 
   BookPtr GetBook(const string& book_name) override {
     // реализуйте метод
-      lock_guard<mutex> lock(m);
+      lock_guard<mutex> lock(m); // ставим замок на критическую секцию
       auto book_iter = books_in_cache_.find(book_name);
       if (book_iter == books_in_cache_.end()) {
+          // расспаковываем книгу, расспаковщик создает объект IBook в куче, т.е. копирует текст в память. Мы фиксируем shared_ptr на этот текст.
           shared_ptr book_shrd_ptr = move(books_unpacker_->UnpackBook(book_name));
+          // Если размер запрошенной книги превышает max_memory, 
+          // то после вызова метода кэш остаётся пустым, то есть книга в него не добавляется.
           if (book_shrd_ptr->GetContent().length() > settings_.max_memory) {
               book_ptr_list_.clear();
               books_in_cache_.clear();
               memory_in_use = 0;
+          // иначе если общий размер книг превышает ограничение max_memory, из кэша удаляются книги с наименьшим рангом, пока это необходимо.
+          // Возможно, пока он полностью не будет опустошён
           } else{
               book_ptr_list_.push_front(book_shrd_ptr);
               books_in_cache_.insert({ book_name, book_ptr_list_.begin() });
